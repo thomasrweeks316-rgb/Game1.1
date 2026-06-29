@@ -27,10 +27,11 @@ var _burn_timer: float = 0.0
 var _burn_dps: float = 0.0
 var _poison_timer: float = 0.0
 var _poison_dps: float = 0.0
-var _active_weapon_index: int = 0
 var _is_dead: bool = false
 
 var _visual: CanvasItem
+var _weapons_layer: Node2D
+var _weapon_mounts: Array[Node2D] = []
 var _model_path: String = ""
 var _model_scale: float = 1.0
 var _model_viewport: SubViewport
@@ -43,7 +44,6 @@ var _battle_scene: Node2D
 var _target: BattleBot = null
 var _ai_timer: float = 0.0
 var _ai_move_target: Vector2 = Vector2.ZERO
-var _rclick_was_pressed: bool = false
 
 
 func setup(chassis: String, weapons: Array, player: bool, boss: bool = false, boss_data: Dictionary = {}) -> void:
@@ -57,6 +57,8 @@ func setup(chassis: String, weapons: Array, player: bool, boss: bool = false, bo
 		var wid := str(w)
 		if not wid.is_empty():
 			weapon_ids.append(wid)
+	if not boss:
+		weapon_ids = GameData.trim_weapons_for_chassis(weapon_ids, chassis)
 	if weapon_ids.is_empty():
 		weapon_ids.append(GameData.STARTING_WEAPON)
 	var chassis_data := GameData.get_chassis(chassis)
@@ -89,20 +91,34 @@ func _build_visuals() -> void:
 	_visual = null
 	_model_viewport = null
 	_model_root = null
+	if _weapons_layer:
+		_weapons_layer.queue_free()
+	_weapons_layer = null
+	_weapon_mounts.clear()
 	if is_boss and not _model_path.is_empty():
 		_build_model_visual()
 	else:
 		_build_polygon_visual()
+	_build_weapon_layer()
 	_add_hud_visuals()
 
 
 func _build_polygon_visual() -> void:
 	_visual_size = bot_size * 28.0
 	var visual_root := BotArt.build_battle_visual(
-		chassis_id, weapon_ids, bot_color, _visual_size, is_player, is_boss
+		chassis_id, weapon_ids, bot_color, _visual_size, is_player, is_boss, false
 	)
 	add_child(visual_root)
 	_visual = visual_root
+
+
+func _build_weapon_layer() -> void:
+	if _weapons_layer:
+		_weapons_layer.queue_free()
+	_weapons_layer = Node2D.new()
+	_weapons_layer.z_index = 2
+	add_child(_weapons_layer)
+	_weapon_mounts = BotArt.attach_weapon_mounts(_weapons_layer, weapon_ids, _visual_size)
 
 
 func _build_model_visual() -> void:
@@ -180,7 +196,7 @@ func _add_hud_visuals() -> void:
 
 func _ready() -> void:
 	collision_layer = 1
-	collision_mask = 2
+	collision_mask = 4
 	for child in get_children():
 		if child is CollisionShape2D:
 			var circle := child.shape as CircleShape2D
@@ -245,37 +261,25 @@ func _player_move(delta: float) -> void:
 	_face_position(mouse_pos)
 	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		fire_at(mouse_pos)
-	if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
-		if not _rclick_was_pressed and weapon_ids.size() > 1:
-			_cycle_weapon()
-		_rclick_was_pressed = true
-	else:
-		_rclick_was_pressed = false
-	# Weapon hotkeys via mouse wheel
-	if Input.is_action_just_pressed("weapon_next"):
-		_cycle_weapon()
-	if Input.is_action_just_pressed("weapon_prev"):
-		_active_weapon_index = (_active_weapon_index - 1 + weapon_ids.size()) % weapon_ids.size()
 
 
-func _cycle_weapon() -> void:
-	if weapon_ids.size() <= 1:
-		return
-	_active_weapon_index = (_active_weapon_index + 1) % weapon_ids.size()
-
-
-func get_active_weapon() -> String:
-	if weapon_ids.is_empty():
-		return ""
-	return weapon_ids[_active_weapon_index]
+func get_equipped_weapon_names() -> PackedStringArray:
+	var names := PackedStringArray()
+	for wid in weapon_ids:
+		names.append(GameData.get_weapon(wid).get("name", wid))
+	return names
 
 
 func fire_at(target_pos: Vector2) -> void:
 	if _disabled_timer > 0 or weapon_ids.is_empty() or _battle_scene == null:
 		return
-	var wid := get_active_weapon()
-	if _fire_cooldowns.get(wid, 0.0) > 0:
-		return
+	for wid in weapon_ids:
+		if _fire_cooldowns.get(wid, 0.0) > 0:
+			continue
+		_fire_weapon(wid, target_pos)
+
+
+func _fire_weapon(wid: String, target_pos: Vector2) -> void:
 	var wdata := GameData.get_weapon(wid)
 	if wdata.is_empty():
 		return
@@ -427,8 +431,6 @@ func _ai_behavior(delta: float) -> void:
 	_update_model_facing()
 	if _disabled_timer <= 0 and weapon_ids.size() > 0:
 		var aim_pos := _target.global_position + Vector2(randf_range(-20, 20), randf_range(-20, 20))
-		if randf() < 0.03 * weapon_ids.size():
-			_active_weapon_index = randi() % weapon_ids.size()
 		fire_at(aim_pos)
 
 
@@ -460,6 +462,8 @@ func _die() -> void:
 	health_changed.emit(current_hp, max_hp)
 	if _visual:
 		_visual.modulate = Color(0.35, 0.35, 0.35, 0.6)
+	if _weapons_layer:
+		_weapons_layer.modulate = Color(0.35, 0.35, 0.35, 0.6)
 	died.emit(self)
 
 
@@ -496,17 +500,25 @@ func _face_position(target_pos: Vector2) -> void:
 	var dir := target_pos - global_position
 	if dir.length_squared() <= 1.0:
 		return
+	var aim_rotation := dir.angle() + PI * 0.5
 	if _model_root:
 		_model_root.rotation.y = atan2(dir.x, dir.y)
 	elif _visual:
-		_visual.rotation = dir.angle() + PI * 0.5
+		_visual.rotation = aim_rotation
+	if _weapons_layer:
+		_weapons_layer.rotation = aim_rotation
 
 
 func _flash_damage() -> void:
+	var flash_targets: Array[CanvasItem] = []
 	if _visual:
-		_visual.modulate = Color(1, 0.3, 0.3)
+		flash_targets.append(_visual)
+	if _weapons_layer:
+		flash_targets.append(_weapons_layer)
+	for target in flash_targets:
+		target.modulate = Color(1, 0.3, 0.3)
 		var tween := create_tween()
-		tween.tween_property(_visual, "modulate", Color.WHITE, 0.15)
+		tween.tween_property(target, "modulate", Color.WHITE, 0.15)
 
 
 func _update_cooldowns(delta: float) -> void:

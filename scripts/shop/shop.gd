@@ -101,8 +101,9 @@ func _on_item_selected(index: int) -> void:
 		"chassis":
 			var c := GameData.get_chassis(meta)
 			_detail_icon.texture = BotArt.get_chassis_icon(meta)
-			_detail_label.text = "%s\nHP: %d | Speed: %d | Armor: %d\nCost: %d gems" % [
-				c.get("name", meta), c.get("hp", 0), c.get("speed", 0), c.get("armor", 0), c.get("gem_cost", 0),
+			_detail_label.text = "%s\nHP: %d | Speed: %d | Armor: %d | Weapon Slots: %d\nCost: %d gems" % [
+				c.get("name", meta), c.get("hp", 0), c.get("speed", 0), c.get("armor", 0),
+				c.get("weapon_slots", 1), c.get("gem_cost", 0),
 			]
 			_buy_btn.disabled = AccountManager.owns_chassis(meta)
 			_buy_btn.text = "Buy for %d Gems" % c.get("gem_cost", 0)

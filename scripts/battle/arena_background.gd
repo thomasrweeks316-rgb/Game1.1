@@ -9,6 +9,7 @@ var _preview_mode := false
 var _time := 0.0
 var _particles: Array[Dictionary] = []
 var _decor: Array[Dictionary] = []
+var _terrain: Array = []
 
 
 func setup(arena: Dictionary, preview_mode: bool = false) -> void:
@@ -18,6 +19,7 @@ func setup(arena: Dictionary, preview_mode: bool = false) -> void:
 	_preview_mode = preview_mode
 	_particles.clear()
 	_decor.clear()
+	_terrain = arena.get("terrain", [])
 	_spawn_particles()
 	_spawn_decor()
 	queue_redraw()
@@ -38,6 +40,7 @@ func _draw() -> void:
 	if not _preview_mode:
 		_draw_floor()
 	_draw_arena_theme()
+	_draw_terrain()
 	_draw_decor()
 	_draw_particles()
 	_draw_vignette()
@@ -176,6 +179,25 @@ func _draw_void_theme() -> void:
 	var void_col := Color(0.5, 0.0, 0.8, 0.12 + sin(_time) * 0.04)
 	draw_circle(Vector2(VIEW_SIZE.x * 0.5, VIEW_SIZE.y * 0.65), 240, void_col)
 	draw_arc(Vector2(VIEW_SIZE.x * 0.5, VIEW_SIZE.y * 0.65), 260, _time, _time + TAU * 0.6, 48, _accent * Color(1, 1, 1, 0.2), 3.0)
+
+
+func _draw_terrain() -> void:
+	if not _preview_mode:
+		return
+	for block in _terrain:
+		var pos: Vector2 = block.get("pos", Vector2.ZERO)
+		var col: Color = block.get("color", Color(0.4, 0.4, 0.4, 0.5))
+		col.a = 0.55
+		match str(block.get("shape", "rect")):
+			"circle":
+				var radius: float = float(block.get("radius", 40.0))
+				draw_circle(pos, radius, col)
+				draw_arc(pos, radius, 0, TAU, 24, col.lightened(0.15), 2.0)
+			_:
+				var size: Vector2 = block.get("size", Vector2(60, 60))
+				var rect := Rect2(pos - size * 0.5, size)
+				draw_rect(rect, col)
+				draw_rect(rect, col.lightened(0.15), false, 2.0)
 
 
 func _draw_decor() -> void:

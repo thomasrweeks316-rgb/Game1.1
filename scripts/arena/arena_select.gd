@@ -29,11 +29,10 @@ func _ready() -> void:
 
 func _populate_arenas() -> void:
 	_arena_list.clear()
-	var trophies := AccountManager.get_trophies()
 	var beaten: Array = AccountManager.progress.get("bosses_beaten", [])
 	for arena in GameData.ARENAS:
 		var arena_id: int = int(arena.get("id", -1))
-		var locked := trophies < int(arena.get("trophy_required", 0))
+		var locked := not AccountManager.is_arena_unlocked(arena_id)
 		var boss_beaten := arena_id in beaten
 		var prefix := ""
 		if locked:
@@ -49,14 +48,9 @@ func _populate_arenas() -> void:
 func _sync_arena_selection() -> void:
 	if _arena_list.item_count == 0:
 		return
-	var trophies := AccountManager.get_trophies()
 	var target_id := AccountManager.get_current_arena()
-	var arena := GameData.get_arena(target_id)
-	if arena.is_empty() or trophies < int(arena.get("trophy_required", 0)):
-		target_id = 0
-		for entry in GameData.ARENAS:
-			if trophies >= int(entry.get("trophy_required", 0)):
-				target_id = int(entry.get("id", 0))
+	if not AccountManager.is_arena_unlocked(target_id):
+		target_id = AccountManager.get_highest_unlocked_arena()
 	var index := 0
 	for i in _arena_list.item_count:
 		if _arena_list.get_item_metadata(i) == target_id:
@@ -76,12 +70,21 @@ func _on_arena_selected(index: int) -> void:
 		_fight_btn.disabled = true
 		_boss_btn.disabled = true
 		return
-	var trophies := AccountManager.get_trophies()
-	var locked := trophies < int(arena.get("trophy_required", 0))
-	_detail.text = "%s\n%s\nTrophies needed: %d\nWin reward: %d gems | Boss reward: %d gems\n\nAI opponents use gear from this arena." % [
+	var locked := not AccountManager.is_arena_unlocked(_selected_arena)
+	var beaten: Array = AccountManager.progress.get("bosses_beaten", [])
+	var boss_beaten := _selected_arena in beaten
+	var boss_name: String = str(arena.get("boss", {}).get("name", "Boss"))
+	var unlock_text := ""
+	if locked:
+		unlock_text = "\n\n%s" % GameData.get_arena_unlock_requirement(_selected_arena)
+	elif not boss_beaten:
+		unlock_text = "\n\nBoss not defeated yet: %s" % boss_name
+	else:
+		unlock_text = "\n\nBoss defeated: %s" % boss_name
+	_detail.text = "%s\n%s\nWin reward: %d gems | Boss reward: %d gems\n\nAI opponents use gear from this arena.%s" % [
 		arena.get("name", "Arena"), arena.get("description", ""),
-		int(arena.get("trophy_required", 0)),
 		int(arena.get("gem_reward_win", 0)), int(arena.get("gem_reward_boss", 0)),
+		unlock_text,
 	]
 	_fight_btn.disabled = locked
 	_boss_btn.disabled = locked
@@ -102,8 +105,8 @@ func _start_battle(boss: bool) -> void:
 	var arena := GameData.get_arena(_selected_arena)
 	if arena.is_empty():
 		return
-	if AccountManager.get_trophies() < int(arena.get("trophy_required", 0)):
-		_detail.text = "You need more trophies to fight in this arena."
+	if not AccountManager.is_arena_unlocked(_selected_arena):
+		_detail.text = GameData.get_arena_unlock_requirement(_selected_arena)
 		return
 	AccountManager.set_current_arena(_selected_arena)
 	AccountManager.queue_battle(_selected_arena, boss)

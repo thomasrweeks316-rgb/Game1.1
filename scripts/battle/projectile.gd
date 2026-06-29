@@ -33,7 +33,7 @@ func setup(bot: BattleBot, wid: String, target_pos: Vector2, dmg: float, wdata: 
 	global_position = bot.global_position + direction * 30.0
 	_build_visual(wdata)
 	collision_layer = 2
-	collision_mask = 1
+	collision_mask = 5
 	monitoring = true
 	if not body_entered.is_connected(_on_body_entered):
 		body_entered.connect(_on_body_entered)
@@ -87,6 +87,12 @@ func _physics_process(delta: float) -> void:
 
 func _on_body_entered(body: Node2D) -> void:
 	if body == owner_bot:
+		return
+	if body.is_in_group("arena_terrain"):
+		var weapon_type := str(weapon_data.get("type", ""))
+		if weapon_type in ["explosive", "mortar", "vortex"]:
+			_explode()
+		queue_free()
 		return
 	if body is BattleBot:
 		var bot := body as BattleBot

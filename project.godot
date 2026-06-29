@@ -21,6 +21,7 @@ GameData="*res://scripts/autoload/game_data.gd"
 AccountManager="*res://scripts/autoload/account_manager.gd"
 UIHelpers="*res://scripts/ui/ui_helpers.gd"
 BotArt="*res://scripts/ui/bot_art.gd"
+_mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
 
 [display]
 
@@ -28,6 +29,10 @@ window/size/viewport_width=1280
 window/size/viewport_height=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/godot_ai/plugin.cfg")
 
 [input]
 

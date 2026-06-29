@@ -93,7 +93,7 @@ text = "Save Loadout"
 
 [node name="Hint" type="Label" parent="HBox/Center"]
 layout_mode = 2
-text = "Click weapons to toggle (max 3)"
+text = "Click weapons to toggle (slots depend on chassis)"
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 12
 theme_override_colors/font_color = Color(0.55, 0.6, 0.7, 1)

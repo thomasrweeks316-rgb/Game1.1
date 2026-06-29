@@ -9,6 +9,7 @@ var _is_boss_fight: bool = false
 var _battle_over: bool = false
 
 @onready var _arena_bg: Node2D = $ArenaBG
+@onready var _arena_terrain: Node2D = $ArenaTerrain
 @onready var _player_hp_label: Label = $HUD/TopBar/PlayerHP
 @onready var _enemy_hp_label: Label = $HUD/TopBar/EnemyHP
 @onready var _weapon_label: Label = $HUD/TopBar/WeaponLabel
@@ -32,6 +33,8 @@ func _ready() -> void:
 		get_tree().call_deferred("change_scene_to_file", "res://scenes/arena/arena_select.tscn")
 		return
 	_arena_bg.setup(arena)
+	if _arena_terrain.has_method("setup"):
+		_arena_terrain.setup(arena)
 	_info_label.text = "%s - %s" % [arena.get("name", "Arena"), "BOSS FIGHT" if _is_boss_fight else "Battle"]
 	UIHelpers.style_button(_continue_btn)
 	_result_panel.visible = false
@@ -102,10 +105,9 @@ func _process(_delta: float) -> void:
 			if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
 				_on_enemy_died(enemy)
 	if _player and _player.is_alive():
-		var wid := _player.get_active_weapon()
-		var wdata := GameData.get_weapon(wid)
-		if not wdata.is_empty():
-			_weapon_label.text = "Weapon: %s (scroll/RClick to switch)" % wdata.get("name", wid)
+		var names := _player.get_equipped_weapon_names()
+		if not names.is_empty():
+			_weapon_label.text = "Weapons: %s (all fire together)" % ", ".join(names)
 
 
 func _on_player_health_changed(current: float, maximum: float) -> void:

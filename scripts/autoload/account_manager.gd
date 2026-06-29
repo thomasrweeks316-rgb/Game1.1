@@ -138,8 +138,8 @@ func buy_weapon(weapon_id: String) -> String:
 		return "Invalid weapon."
 	if owns_weapon(weapon_id):
 		return "Already owned."
-	if get_trophies() < _arena_trophy_req(w.arena_unlock):
-		return "Unlock a higher arena first."
+	if not is_arena_unlocked(w.arena_unlock):
+		return GameData.get_arena_unlock_requirement(w.arena_unlock)
 	if not spend_gems(w.gem_cost):
 		return "Not enough gems."
 	var owned: Array = progress.get("owned_weapons", [])
@@ -155,8 +155,8 @@ func buy_chassis(chassis_id: String) -> String:
 		return "Invalid chassis."
 	if owns_chassis(chassis_id):
 		return "Already owned."
-	if get_trophies() < _arena_trophy_req(c.arena_unlock):
-		return "Unlock a higher arena first."
+	if not is_arena_unlocked(c.arena_unlock):
+		return GameData.get_arena_unlock_requirement(c.arena_unlock)
 	if not spend_gems(c.gem_cost):
 		return "Not enough gems."
 	var owned: Array = progress.get("owned_chassis", [])
@@ -168,7 +168,7 @@ func buy_chassis(chassis_id: String) -> String:
 
 func set_loadout(chassis_id: String, weapons: Array) -> void:
 	progress["equipped_chassis"] = chassis_id
-	progress["equipped_weapons"] = weapons
+	progress["equipped_weapons"] = GameData.trim_weapons_for_chassis(weapons, chassis_id)
 	save_progress()
 
 
@@ -189,11 +189,25 @@ func get_loadout() -> Dictionary:
 			weapons.append(wid)
 	if weapons.is_empty():
 		weapons.append(GameData.STARTING_WEAPON)
+	weapons = GameData.trim_weapons_for_chassis(weapons, chassis)
 	return {"chassis": chassis, "weapons": weapons}
 
 
 func get_current_arena() -> int:
 	return progress.get("current_arena", 0)
+
+
+func is_arena_unlocked(arena_id: int) -> bool:
+	return GameData.is_arena_unlocked(arena_id, progress.get("bosses_beaten", []))
+
+
+func get_highest_unlocked_arena() -> int:
+	var highest := 0
+	for arena in GameData.ARENAS:
+		var arena_id: int = int(arena.get("id", 0))
+		if is_arena_unlocked(arena_id):
+			highest = maxi(highest, arena_id)
+	return highest
 
 
 func set_current_arena(arena_id: int) -> void:
@@ -314,10 +328,3 @@ func _is_valid_username(username: String) -> bool:
 		if not username[i] in allowed:
 			return false
 	return true
-
-
-func _arena_trophy_req(arena_index: int) -> int:
-	var arena := GameData.get_arena(arena_index)
-	if arena.is_empty():
-		return 0
-	return arena.get("trophy_required", 0)

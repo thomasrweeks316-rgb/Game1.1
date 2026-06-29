@@ -36,7 +36,9 @@ func _populate_lists() -> void:
 	for cid in GameData.CHASSIS:
 		if AccountManager.owns_chassis(cid):
 			var c := GameData.get_chassis(cid)
-			_chassis_list.add_item("%s (HP:%d SPD:%d)" % [c.get("name", cid), c.get("hp", 0), c.get("speed", 0)])
+			_chassis_list.add_item("%s (HP:%d SPD:%d Slots:%d)" % [
+				c.get("name", cid), c.get("hp", 0), c.get("speed", 0), c.get("weapon_slots", 1)
+			])
 			var idx := _chassis_list.item_count - 1
 			_chassis_list.set_item_metadata(idx, cid)
 			_chassis_list.set_item_icon(idx, BotArt.get_chassis_icon(cid))
@@ -58,6 +60,7 @@ func _load_saved_loadout() -> void:
 	var saved_weapons: Array = loadout.get("weapons", [GameData.STARTING_WEAPON])
 	for w in saved_weapons:
 		_selected_weapons.append(str(w))
+	_trim_weapons_to_chassis_limit()
 	if _selected_chassis.is_empty() and _chassis_list.item_count > 0:
 		_selected_chassis = _chassis_list.get_item_metadata(0)
 	if _selected_weapons.is_empty() and _weapon_list.item_count > 0:
@@ -87,8 +90,22 @@ func _refresh_weapon_highlights() -> void:
 
 func _on_chassis_selected(index: int) -> void:
 	_selected_chassis = _chassis_list.get_item_metadata(index)
+	_trim_weapons_to_chassis_limit()
+	_refresh_weapon_highlights()
 	_update_preview()
 	_update_equipped_label()
+
+
+func _get_max_weapon_slots() -> int:
+	if _selected_chassis.is_empty():
+		return GameData.MAX_WEAPON_SLOTS
+	return GameData.get_chassis_weapon_slots(_selected_chassis)
+
+
+func _trim_weapons_to_chassis_limit() -> void:
+	var max_slots := _get_max_weapon_slots()
+	while _selected_weapons.size() > max_slots:
+		_selected_weapons.pop_back()
 
 
 func _on_weapon_clicked(index: int, _at_position: Vector2, _mouse_button_index: int) -> void:
@@ -96,8 +113,9 @@ func _on_weapon_clicked(index: int, _at_position: Vector2, _mouse_button_index: 
 	if wid in _selected_weapons:
 		_selected_weapons.erase(wid)
 	else:
-		if _selected_weapons.size() >= GameData.MAX_WEAPON_SLOTS:
-			_equipped_label.text = "Maximum %d weapons! Click a selected weapon to remove it." % GameData.MAX_WEAPON_SLOTS
+		var max_slots := _get_max_weapon_slots()
+		if _selected_weapons.size() >= max_slots:
+			_equipped_label.text = "This chassis supports %d weapon(s)! Click a selected weapon to remove it." % max_slots
 			return
 		_selected_weapons.append(wid)
 	_refresh_weapon_highlights()
@@ -117,11 +135,14 @@ func _update_equipped_label() -> void:
 		return
 	var chassis := GameData.get_chassis(_selected_chassis)
 	var chassis_name: String = chassis.get("name", "?")
+	var max_slots := _get_max_weapon_slots()
 	var weapon_names: PackedStringArray = []
 	for w in _selected_weapons:
 		weapon_names.append(GameData.get_weapon(w).get("name", w))
 	var weapons_text := ", ".join(weapon_names) if not weapon_names.is_empty() else "(none selected)"
-	_equipped_label.text = "Chassis: %s\nWeapons: %s" % [chassis_name, weapons_text]
+	_equipped_label.text = "Chassis: %s (%d weapon slot%s)\nWeapons: %s" % [
+		chassis_name, max_slots, "s" if max_slots != 1 else "", weapons_text
+	]
 
 
 func _on_save() -> void:

@@ -35,6 +35,7 @@ func build_battle_visual(
 	visual_size: float,
 	is_player: bool,
 	is_boss: bool,
+	include_weapons: bool = true,
 ) -> Node2D:
 	var root := Node2D.new()
 	var s := visual_size
@@ -107,14 +108,8 @@ func build_battle_visual(
 	root.add_child(sensor)
 
 	# Weapon mounts
-	var mount_count := mini(weapon_ids.size(), 3)
-	for i in mount_count:
-		var wid: String = str(weapon_ids[i])
-		var wdata := GameData.get_weapon(wid)
-		var wcol: Color = wdata.get("color", Color.GRAY)
-		var angle := -0.55 + float(i) * 0.55
-		var mount_pos := Vector2(sin(angle), -cos(angle)) * s * 0.72
-		_add_weapon_mount(root, mount_pos, wcol, wdata, s * 0.2)
+	if include_weapons:
+		attach_weapon_mounts(root, weapon_ids, s)
 
 	if is_boss:
 		var spike_color := body_color.lightened(0.15)
@@ -132,6 +127,23 @@ func build_battle_visual(
 			root.add_child(spike)
 
 	return root
+
+
+func attach_weapon_mounts(parent: Node2D, weapon_ids: Array, visual_size: float) -> Array[Node2D]:
+	var mounts: Array[Node2D] = []
+	var mount_count := mini(weapon_ids.size(), 3)
+	var mount_size := visual_size * 0.42
+	for i in mount_count:
+		var wid: String = str(weapon_ids[i])
+		var wdata := GameData.get_weapon(wid)
+		if wdata.is_empty():
+			continue
+		var wcol: Color = wdata.get("color", Color.GRAY)
+		var angle := -0.55 + float(i) * 0.55
+		var mount_pos := Vector2(sin(angle), -cos(angle)) * visual_size * 0.78
+		var mount := _add_weapon_mount(parent, mount_pos, wcol, wdata, mount_size, wid)
+		mounts.append(mount)
+	return mounts
 
 
 func _chassis_body_polygon(chassis_id: String, s: float, is_boss: bool) -> PackedVector2Array:
@@ -177,21 +189,49 @@ func _chassis_shine_polygon(chassis_id: String, s: float, is_boss: bool) -> Pack
 			])
 
 
-func _add_weapon_mount(parent: Node2D, pos: Vector2, color: Color, wdata: Dictionary, size: float) -> void:
+func _add_weapon_mount(
+	parent: Node2D,
+	pos: Vector2,
+	color: Color,
+	wdata: Dictionary,
+	size: float,
+	weapon_id: String = "",
+) -> Node2D:
 	var wtype := str(wdata.get("type", "bullet"))
 	var mount := Node2D.new()
 	mount.position = pos
 	mount.rotation = pos.angle() + PI * 0.5
+	if not weapon_id.is_empty():
+		mount.set_meta("weapon_id", weapon_id)
 	parent.add_child(mount)
+
+	var icon_scale := size / float(ICON_SIZE)
+	var icon := Sprite2D.new()
+	icon.texture = get_weapon_icon(weapon_id) if not weapon_id.is_empty() else null
+	if icon.texture:
+		icon.scale = Vector2(icon_scale, icon_scale)
+		icon.position = Vector2(0, -size * 0.32)
+		mount.add_child(icon)
 
 	var base := Polygon2D.new()
 	base.color = color.darkened(0.25)
+	base.z_index = -1
+	var base_w := size * 0.55
+	var base_h := size * 0.28
 	base.polygon = PackedVector2Array([
-		Vector2(-size * 0.35, -size * 0.2), Vector2(size * 0.35, -size * 0.2),
-		Vector2(size * 0.25, size * 0.2), Vector2(-size * 0.25, size * 0.2),
+		Vector2(-base_w * 0.5, -base_h * 0.5), Vector2(base_w * 0.5, -base_h * 0.5),
+		Vector2(base_w * 0.4, base_h * 0.5), Vector2(-base_w * 0.4, base_h * 0.5),
 	])
 	mount.add_child(base)
+	mount.move_child(base, 0)
 
+	if icon.texture == null:
+		_add_weapon_shape(mount, wtype, color, size)
+
+	return mount
+
+
+func _add_weapon_shape(mount: Node2D, wtype: String, color: Color, size: float) -> void:
 	match wtype:
 		"melee", "boomerang":
 			var blade := Polygon2D.new()
